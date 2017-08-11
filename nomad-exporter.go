@@ -1,4 +1,4 @@
-package main // import "github.com/Nomon/nomad-exporter"
+package main // import "github.com/olgert/nomad-exporter"
 
 import (
 	"flag"
@@ -11,6 +11,7 @@ import (
 	"sync"
 
 	"github.com/hashicorp/nomad/api"
+	"github.com/orcaman/concurrent-map"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/common/version"
 )
@@ -75,6 +76,26 @@ var (
 		"Task CPU usage, percent",
 		[]string{"job", "group", "alloc", "task", "region", "datacenter", "node"}, nil,
 	)
+	taskResourceCPU = prometheus.NewDesc(
+		prometheus.BuildFQName(namespace, "", "task_resource_cpu_mhz"),
+		"Task CPU total Mhz requeted",
+		[]string{"job", "group", "alloc", "task", "region", "datacenter", "node"}, nil,
+	)
+	taskUnweightedCPUUtilizationRate = prometheus.NewDesc(
+		prometheus.BuildFQName(namespace, "", "task_unweighted_cpu_utilization_rate"),
+		"Unweighted ratio of consumed CPU to allocated for task",
+		[]string{"job", "group", "alloc", "task", "region", "datacenter", "node"}, nil,
+	)
+	taskCPUUtilizationRate = prometheus.NewDesc(
+		prometheus.BuildFQName(namespace, "", "task_cpu_utilization_rate"),
+		"Ratio of allocated CPU to available to task on node",
+		[]string{"job", "group", "alloc", "task", "region", "datacenter", "node"}, nil,
+	)
+	taskResourceMemory = prometheus.NewDesc(
+		prometheus.BuildFQName(namespace, "", "task_resource_memory_bytes"),
+		"Task Memory total Bytes requeted",
+		[]string{"job", "group", "alloc", "task", "region", "datacenter", "node"}, nil,
+	)
 	taskMemoryRssBytes = prometheus.NewDesc(
 		prometheus.BuildFQName(namespace, "", "task_memory_rss_bytes"),
 		"Task memory RSS usage, bytes",
@@ -108,6 +129,11 @@ var (
 	nodeUsedCPU = prometheus.NewDesc(
 		prometheus.BuildFQName(namespace, "", "node_used_cpu_megahertz"),
 		"Amount of CPU used on the node in MHz",
+		[]string{"node", "datacenter"}, nil,
+	)
+	nodeCPUAllocationRate = prometheus.NewDesc(
+		prometheus.BuildFQName(namespace, "", "node_cpu_allocation_rate"),
+		"Ratio of allocated CPU to available on node",
 		[]string{"node", "datacenter"}, nil,
 	)
 )
@@ -150,16 +176,28 @@ func (e *Exporter) Describe(ch chan<- *prometheus.Desc) {
 	ch <- taskCPUPercent
 	ch <- taskCPUTotalTicks
 	ch <- taskMemoryRssBytes
+	ch <- taskResourceCPU
+	ch <- taskUnweightedCPUUtilizationRate
+	ch <- taskCPUUtilizationRate
 	ch <- nodeResourceMemory
 	ch <- nodeAllocatedMemory
 	ch <- nodeUsedMemory
 	ch <- nodeResourceCPU
 	ch <- nodeAllocatedCPU
 	ch <- nodeUsedCPU
+	ch <- nodeCPUAllocationRate
+}
+
+type Pair struct {
+	v1, v2 interface{}
 }
 
 // Collect collects nomad metrics
 func (e *Exporter) Collect(ch chan<- prometheus.Metric) {
+
+	var taskResMap = cmap.New()
+	var nodeResMap = cmap.New()
+
 	peers, err := e.client.Status().Peers()
 	if err != nil {
 		ch <- prometheus.MustNewConstMetric(
@@ -233,6 +271,20 @@ func (e *Exporter) Collect(ch chan<- prometheus.Metric) {
 				ch <- prometheus.MustNewConstMetric(
 					taskMemoryRssBytes, prometheus.GaugeValue, float64(taskStats.ResourceUsage.MemoryStats.RSS), alloc.Job.Name, alloc.TaskGroup, alloc.Name, taskName, alloc.Job.Region, node.Datacenter, node.Name,
 				)
+				if taskResource, ok := alloc.TaskResources[taskName]; ok {
+					ch <- prometheus.MustNewConstMetric(
+						taskResourceCPU, prometheus.GaugeValue, float64(taskResource.CPU), alloc.Job.Name, alloc.TaskGroup, alloc.Name, taskName, alloc.Job.Region, node.Datacenter, node.Name,
+					)
+					ch <- prometheus.MustNewConstMetric(
+						taskResourceMemory, prometheus.GaugeValue, float64(taskResource.MemoryMB*1024*1024), alloc.Job.Name, alloc.TaskGroup, alloc.Name, taskName, alloc.Job.Region, node.Datacenter, node.Name,
+					)
+					var taskUnweightedCPUUtilizationValue = float64(taskStats.ResourceUsage.CpuStats.TotalTicks)/float64(taskResource.CPU)
+					allocAndRate := Pair{alloc, taskUnweightedCPUUtilizationValue}
+					taskResMap.Set(node.ID+"/"+alloc.ID+"/"+taskName, allocAndRate)
+					ch <- prometheus.MustNewConstMetric(
+						taskUnweightedCPUUtilizationRate, prometheus.GaugeValue, taskUnweightedCPUUtilizationValue, alloc.Job.Name, alloc.TaskGroup, alloc.Name, taskName, alloc.Job.Region, node.Datacenter, node.Name,
+					)
+				}
 			}
 			ch <- prometheus.MustNewConstMetric(
 				allocationCPU, prometheus.GaugeValue, stats.ResourceUsage.CpuStats.Percent, alloc.Job.Name, alloc.TaskGroup, alloc.Name, alloc.Job.Region, node.Datacenter, node.Name,
@@ -249,11 +301,11 @@ func (e *Exporter) Collect(ch chan<- prometheus.Metric) {
 		}(a)
 	}
 
-	for _, a := range nodes {
+	for _, n := range nodes {
 		w.Add(1)
-		go func(a *api.NodeListStub) {
+		go func(n *api.NodeListStub) {
 			defer w.Done()
-			node, _, err := e.client.Nodes().Info(a.ID, &api.QueryOptions{})
+			node, _, err := e.client.Nodes().Info(n.ID, &api.QueryOptions{})
 			if err != nil {
 				logError(err)
 				return
@@ -264,7 +316,7 @@ func (e *Exporter) Collect(ch chan<- prometheus.Metric) {
 				return
 			}
 			if node.Status == "ready" {
-				nodeStats, err := e.client.Nodes().Stats(a.ID, &api.QueryOptions{})
+				nodeStats, err := e.client.Nodes().Stats(n.ID, &api.QueryOptions{})
 				if err != nil {
 					logError(err)
 					return
@@ -294,10 +346,33 @@ func (e *Exporter) Collect(ch chan<- prometheus.Metric) {
 				ch <- prometheus.MustNewConstMetric(
 					nodeUsedCPU, prometheus.GaugeValue, float64(math.Floor(nodeStats.CPUTicksConsumed)), node.Name, node.Datacenter,
 				)
+				var nodeCPUAllocationValue = float64(allocatedCPU) / float64(node.Resources.CPU)
+				ch <- prometheus.MustNewConstMetric(
+					nodeCPUAllocationRate, prometheus.GaugeValue, nodeCPUAllocationValue, node.Name, node.Datacenter,
+				)
+				nodeAndRate := Pair{node, nodeCPUAllocationValue}
+				nodeResMap.Set(node.ID, nodeAndRate)
 			}
-		}(a)
+		}(n)
 	}
 	w.Wait()
+	for taskPath, allocAndRate := range taskResMap.Items() {
+		var taskMeta = strings.Split(taskPath, "/")
+		var nodeId = taskMeta[0]
+		var taskName = taskMeta[2]
+		var unweightedTaskUtilizationRate = allocAndRate.(Pair).v2.(float64)
+		var alloc = allocAndRate.(Pair).v1.(*api.Allocation)
+		if nodeAndRate, ok := nodeResMap.Get(nodeId); ok {
+			var nodeAllocationRate = nodeAndRate.(Pair).v2.(float64)
+			var utilizationRate = (unweightedTaskUtilizationRate * nodeAllocationRate)
+			var node = nodeAndRate.(Pair).v1.(*api.Node)
+			ch <- prometheus.MustNewConstMetric(
+				taskCPUUtilizationRate, prometheus.GaugeValue, utilizationRate, alloc.Job.Name,
+				alloc.TaskGroup, alloc.Name, taskName, alloc.Job.Region, node.Datacenter, node.Name,
+			)
+		}
+	}
+
 }
 
 func getRunningAllocs(client *api.Client, nodeID string) ([]*api.Allocation, error) {
