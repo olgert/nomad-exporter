@@ -49,42 +49,42 @@ var (
 	allocationMemory = prometheus.NewDesc(
 		prometheus.BuildFQName(namespace, "", "allocation_memory"),
 		"Allocation memory usage",
-		[]string{"job", "group", "alloc", "region", "datacenter", "node"}, nil,
+		[]string{"job", "group", "alloc", "region", "datacenter", "node", "project"}, nil,
 	)
 	allocationMemoryLimit = prometheus.NewDesc(
 		prometheus.BuildFQName(namespace, "", "allocation_memory_limit"),
 		"Allocation memory limit",
-		[]string{"job", "group", "alloc", "region", "datacenter", "node"}, nil,
+		[]string{"job", "group", "alloc", "region", "datacenter", "node", "project"}, nil,
 	)
 	allocationCPU = prometheus.NewDesc(
 		prometheus.BuildFQName(namespace, "", "allocation_cpu"),
 		"Allocation CPU usage",
-		[]string{"job", "group", "alloc", "region", "datacenter", "node"}, nil,
+		[]string{"job", "group", "alloc", "region", "datacenter", "node", "project"}, nil,
 	)
 	allocationCPUThrottled = prometheus.NewDesc(
 		prometheus.BuildFQName(namespace, "", "allocation_cpu_throttle"),
 		"Allocation throttled CPU",
-		[]string{"job", "group", "alloc", "region", "datacenter", "node"}, nil,
+		[]string{"job", "group", "alloc", "region", "datacenter", "node", "project"}, nil,
 	)
 	taskCPUTotalTicks = prometheus.NewDesc(
 		prometheus.BuildFQName(namespace, "", "task_cpu_total_ticks"),
 		"Task CPU total ticks",
-		[]string{"job", "group", "alloc", "task", "region", "datacenter", "node"}, nil,
+		[]string{"job", "group", "alloc", "task", "region", "datacenter", "node", "project"}, nil,
 	)
 	taskCPUPercent = prometheus.NewDesc(
 		prometheus.BuildFQName(namespace, "", "task_cpu_percent"),
 		"Task CPU usage, percent",
-		[]string{"job", "group", "alloc", "task", "region", "datacenter", "node"}, nil,
+		[]string{"job", "group", "alloc", "task", "region", "datacenter", "node", "project"}, nil,
 	)
 	taskResourceCPU = prometheus.NewDesc(
 		prometheus.BuildFQName(namespace, "", "task_resource_cpu_mhz"),
 		"Task CPU total Mhz requeted",
-		[]string{"job", "group", "alloc", "task", "region", "datacenter", "node"}, nil,
+		[]string{"job", "group", "alloc", "task", "region", "datacenter", "node", "project"}, nil,
 	)
 	taskUnweightedCPUUtilizationRate = prometheus.NewDesc(
 		prometheus.BuildFQName(namespace, "", "task_unweighted_cpu_utilization_rate"),
 		"Unweighted ratio of consumed CPU to allocated for task",
-		[]string{"job", "group", "alloc", "task", "region", "datacenter", "node"}, nil,
+		[]string{"job", "group", "alloc", "task", "region", "datacenter", "node", "project"}, nil,
 	)
 	taskCPUUtilizationRate = prometheus.NewDesc(
 		prometheus.BuildFQName(namespace, "", "task_cpu_utilization_rate"),
@@ -94,12 +94,12 @@ var (
 	taskResourceMemory = prometheus.NewDesc(
 		prometheus.BuildFQName(namespace, "", "task_resource_memory_bytes"),
 		"Task Memory total Bytes requeted",
-		[]string{"job", "group", "alloc", "task", "region", "datacenter", "node"}, nil,
+		[]string{"job", "group", "alloc", "task", "region", "datacenter", "node", "project"}, nil,
 	)
 	taskMemoryRssBytes = prometheus.NewDesc(
 		prometheus.BuildFQName(namespace, "", "task_memory_rss_bytes"),
 		"Task memory RSS usage, bytes",
-		[]string{"job", "group", "alloc", "task", "region", "datacenter", "node"}, nil,
+		[]string{"job", "group", "alloc", "task", "region", "datacenter", "node", "project"}, nil,
 	)
 	nodeResourceMemory = prometheus.NewDesc(
 		prometheus.BuildFQName(namespace, "", "node_resource_memory_megabytes"),
@@ -261,42 +261,47 @@ func (e *Exporter) Collect(ch chan<- prometheus.Metric) {
 				logError(err)
 				return
 			}
+			job, _, err := e.client.Jobs().Info(alloc.JobID, &api.QueryOptions{})
+			if err != nil {
+				logError(err)
+				return
+			}
 			for taskName, taskStats := range stats.Tasks {
 				ch <- prometheus.MustNewConstMetric(
-					taskCPUPercent, prometheus.GaugeValue, taskStats.ResourceUsage.CpuStats.Percent, alloc.Job.Name, alloc.TaskGroup, alloc.Name, taskName, alloc.Job.Region, node.Datacenter, node.Name,
+					taskCPUPercent, prometheus.GaugeValue, taskStats.ResourceUsage.CpuStats.Percent, alloc.Job.Name, alloc.TaskGroup, alloc.Name, taskName, alloc.Job.Region, node.Datacenter, node.Name, job.Meta["project"],
 				)
 				ch <- prometheus.MustNewConstMetric(
-					taskCPUTotalTicks, prometheus.GaugeValue, taskStats.ResourceUsage.CpuStats.TotalTicks, alloc.Job.Name, alloc.TaskGroup, alloc.Name, taskName, alloc.Job.Region, node.Datacenter, node.Name,
+					taskCPUTotalTicks, prometheus.GaugeValue, taskStats.ResourceUsage.CpuStats.TotalTicks, alloc.Job.Name, alloc.TaskGroup, alloc.Name, taskName, alloc.Job.Region, node.Datacenter, node.Name, job.Meta["project"],
 				)
 				ch <- prometheus.MustNewConstMetric(
-					taskMemoryRssBytes, prometheus.GaugeValue, float64(taskStats.ResourceUsage.MemoryStats.RSS), alloc.Job.Name, alloc.TaskGroup, alloc.Name, taskName, alloc.Job.Region, node.Datacenter, node.Name,
+					taskMemoryRssBytes, prometheus.GaugeValue, float64(taskStats.ResourceUsage.MemoryStats.RSS), alloc.Job.Name, alloc.TaskGroup, alloc.Name, taskName, alloc.Job.Region, node.Datacenter, node.Name, job.Meta["project"],
 				)
 				if taskResource, ok := alloc.TaskResources[taskName]; ok {
 					ch <- prometheus.MustNewConstMetric(
-						taskResourceCPU, prometheus.GaugeValue, float64(taskResource.CPU), alloc.Job.Name, alloc.TaskGroup, alloc.Name, taskName, alloc.Job.Region, node.Datacenter, node.Name,
+						taskResourceCPU, prometheus.GaugeValue, float64(taskResource.CPU), alloc.Job.Name, alloc.TaskGroup, alloc.Name, taskName, alloc.Job.Region, node.Datacenter, node.Name, job.Meta["project"],
 					)
 					ch <- prometheus.MustNewConstMetric(
-						taskResourceMemory, prometheus.GaugeValue, float64(taskResource.MemoryMB*1024*1024), alloc.Job.Name, alloc.TaskGroup, alloc.Name, taskName, alloc.Job.Region, node.Datacenter, node.Name,
+						taskResourceMemory, prometheus.GaugeValue, float64(taskResource.MemoryMB*1024*1024), alloc.Job.Name, alloc.TaskGroup, alloc.Name, taskName, alloc.Job.Region, node.Datacenter, node.Name, job.Meta["project"],
 					)
 					var taskUnweightedCPUUtilizationValue = float64(taskStats.ResourceUsage.CpuStats.TotalTicks)/float64(taskResource.CPU)
 					allocAndRate := Pair{alloc, taskUnweightedCPUUtilizationValue}
 					taskResMap.Set(node.ID+"/"+alloc.ID+"/"+taskName, allocAndRate)
 					ch <- prometheus.MustNewConstMetric(
-						taskUnweightedCPUUtilizationRate, prometheus.GaugeValue, taskUnweightedCPUUtilizationValue, alloc.Job.Name, alloc.TaskGroup, alloc.Name, taskName, alloc.Job.Region, node.Datacenter, node.Name,
+						taskUnweightedCPUUtilizationRate, prometheus.GaugeValue, taskUnweightedCPUUtilizationValue, alloc.Job.Name, alloc.TaskGroup, alloc.Name, taskName, alloc.Job.Region, node.Datacenter, node.Name, job.Meta["project"],
 					)
 				}
 			}
 			ch <- prometheus.MustNewConstMetric(
-				allocationCPU, prometheus.GaugeValue, stats.ResourceUsage.CpuStats.Percent, alloc.Job.Name, alloc.TaskGroup, alloc.Name, alloc.Job.Region, node.Datacenter, node.Name,
+				allocationCPU, prometheus.GaugeValue, stats.ResourceUsage.CpuStats.Percent, alloc.Job.Name, alloc.TaskGroup, alloc.Name, alloc.Job.Region, node.Datacenter, node.Name, job.Meta["project"],
 			)
 			ch <- prometheus.MustNewConstMetric(
-				allocationCPUThrottled, prometheus.GaugeValue, float64(stats.ResourceUsage.CpuStats.ThrottledTime), alloc.Job.Name, alloc.TaskGroup, alloc.Name, alloc.Job.Region, node.Datacenter, node.Name,
+				allocationCPUThrottled, prometheus.GaugeValue, float64(stats.ResourceUsage.CpuStats.ThrottledTime), alloc.Job.Name, alloc.TaskGroup, alloc.Name, alloc.Job.Region, node.Datacenter, node.Name, job.Meta["project"],
 			)
 			ch <- prometheus.MustNewConstMetric(
-				allocationMemory, prometheus.GaugeValue, float64(stats.ResourceUsage.MemoryStats.RSS), alloc.Job.Name, alloc.TaskGroup, alloc.Name, alloc.Job.Region, node.Datacenter, node.Name,
+				allocationMemory, prometheus.GaugeValue, float64(stats.ResourceUsage.MemoryStats.RSS), alloc.Job.Name, alloc.TaskGroup, alloc.Name, alloc.Job.Region, node.Datacenter, node.Name, job.Meta["project"],
 			)
 			ch <- prometheus.MustNewConstMetric(
-				allocationMemoryLimit, prometheus.GaugeValue, float64(alloc.Resources.MemoryMB), alloc.Job.Name, alloc.TaskGroup, alloc.Name, alloc.Job.Region, node.Datacenter, node.Name,
+				allocationMemoryLimit, prometheus.GaugeValue, float64(alloc.Resources.MemoryMB), alloc.Job.Name, alloc.TaskGroup, alloc.Name, alloc.Job.Region, node.Datacenter, node.Name, job.Meta["project"],
 			)
 		}(a)
 	}
