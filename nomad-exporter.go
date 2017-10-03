@@ -266,42 +266,46 @@ func (e *Exporter) Collect(ch chan<- prometheus.Metric) {
 				logError(err)
 				return
 			}
+			job_meta_project, exists := job.Meta["project"]
+			if exists == false {
+				job_meta_project = "NOTSET"
+			}
 			for taskName, taskStats := range stats.Tasks {
 				ch <- prometheus.MustNewConstMetric(
-					taskCPUPercent, prometheus.GaugeValue, taskStats.ResourceUsage.CpuStats.Percent, alloc.Job.Name, alloc.TaskGroup, alloc.Name, taskName, alloc.Job.Region, node.Datacenter, node.Name, job.Meta["project"],
+					taskCPUPercent, prometheus.GaugeValue, taskStats.ResourceUsage.CpuStats.Percent, alloc.Job.Name, alloc.TaskGroup, alloc.Name, taskName, alloc.Job.Region, node.Datacenter, node.Name, job_meta_project,
 				)
 				ch <- prometheus.MustNewConstMetric(
-					taskCPUTotalTicks, prometheus.GaugeValue, taskStats.ResourceUsage.CpuStats.TotalTicks, alloc.Job.Name, alloc.TaskGroup, alloc.Name, taskName, alloc.Job.Region, node.Datacenter, node.Name, job.Meta["project"],
+					taskCPUTotalTicks, prometheus.GaugeValue, taskStats.ResourceUsage.CpuStats.TotalTicks, alloc.Job.Name, alloc.TaskGroup, alloc.Name, taskName, alloc.Job.Region, node.Datacenter, node.Name, job_meta_project,
 				)
 				ch <- prometheus.MustNewConstMetric(
-					taskMemoryRssBytes, prometheus.GaugeValue, float64(taskStats.ResourceUsage.MemoryStats.RSS), alloc.Job.Name, alloc.TaskGroup, alloc.Name, taskName, alloc.Job.Region, node.Datacenter, node.Name, job.Meta["project"],
+					taskMemoryRssBytes, prometheus.GaugeValue, float64(taskStats.ResourceUsage.MemoryStats.RSS), alloc.Job.Name, alloc.TaskGroup, alloc.Name, taskName, alloc.Job.Region, node.Datacenter, node.Name, job_meta_project,
 				)
 				if taskResource, ok := alloc.TaskResources[taskName]; ok {
 					ch <- prometheus.MustNewConstMetric(
-						taskResourceCPU, prometheus.GaugeValue, float64(taskResource.CPU), alloc.Job.Name, alloc.TaskGroup, alloc.Name, taskName, alloc.Job.Region, node.Datacenter, node.Name, job.Meta["project"],
+						taskResourceCPU, prometheus.GaugeValue, float64(taskResource.CPU), alloc.Job.Name, alloc.TaskGroup, alloc.Name, taskName, alloc.Job.Region, node.Datacenter, node.Name, job_meta_project,
 					)
 					ch <- prometheus.MustNewConstMetric(
-						taskResourceMemory, prometheus.GaugeValue, float64(taskResource.MemoryMB*1024*1024), alloc.Job.Name, alloc.TaskGroup, alloc.Name, taskName, alloc.Job.Region, node.Datacenter, node.Name, job.Meta["project"],
+						taskResourceMemory, prometheus.GaugeValue, float64(taskResource.MemoryMB*1024*1024), alloc.Job.Name, alloc.TaskGroup, alloc.Name, taskName, alloc.Job.Region, node.Datacenter, node.Name, job_meta_project,
 					)
 					var taskUnweightedCPUUtilizationValue = float64(taskStats.ResourceUsage.CpuStats.TotalTicks)/float64(taskResource.CPU)
 					allocAndRate := Pair{alloc, taskUnweightedCPUUtilizationValue}
 					taskResMap.Set(node.ID+"/"+alloc.ID+"/"+taskName, allocAndRate)
 					ch <- prometheus.MustNewConstMetric(
-						taskUnweightedCPUUtilizationRate, prometheus.GaugeValue, taskUnweightedCPUUtilizationValue, alloc.Job.Name, alloc.TaskGroup, alloc.Name, taskName, alloc.Job.Region, node.Datacenter, node.Name, job.Meta["project"],
+						taskUnweightedCPUUtilizationRate, prometheus.GaugeValue, taskUnweightedCPUUtilizationValue, alloc.Job.Name, alloc.TaskGroup, alloc.Name, taskName, alloc.Job.Region, node.Datacenter, node.Name, job_meta_project,
 					)
 				}
 			}
 			ch <- prometheus.MustNewConstMetric(
-				allocationCPU, prometheus.GaugeValue, stats.ResourceUsage.CpuStats.Percent, alloc.Job.Name, alloc.TaskGroup, alloc.Name, alloc.Job.Region, node.Datacenter, node.Name, job.Meta["project"],
+				allocationCPU, prometheus.GaugeValue, stats.ResourceUsage.CpuStats.Percent, alloc.Job.Name, alloc.TaskGroup, alloc.Name, alloc.Job.Region, node.Datacenter, node.Name, job_meta_project,
 			)
 			ch <- prometheus.MustNewConstMetric(
-				allocationCPUThrottled, prometheus.GaugeValue, float64(stats.ResourceUsage.CpuStats.ThrottledTime), alloc.Job.Name, alloc.TaskGroup, alloc.Name, alloc.Job.Region, node.Datacenter, node.Name, job.Meta["project"],
+				allocationCPUThrottled, prometheus.GaugeValue, float64(stats.ResourceUsage.CpuStats.ThrottledTime), alloc.Job.Name, alloc.TaskGroup, alloc.Name, alloc.Job.Region, node.Datacenter, node.Name, job_meta_project,
 			)
 			ch <- prometheus.MustNewConstMetric(
-				allocationMemory, prometheus.GaugeValue, float64(stats.ResourceUsage.MemoryStats.RSS), alloc.Job.Name, alloc.TaskGroup, alloc.Name, alloc.Job.Region, node.Datacenter, node.Name, job.Meta["project"],
+				allocationMemory, prometheus.GaugeValue, float64(stats.ResourceUsage.MemoryStats.RSS), alloc.Job.Name, alloc.TaskGroup, alloc.Name, alloc.Job.Region, node.Datacenter, node.Name, job_meta_project,
 			)
 			ch <- prometheus.MustNewConstMetric(
-				allocationMemoryLimit, prometheus.GaugeValue, float64(alloc.Resources.MemoryMB), alloc.Job.Name, alloc.TaskGroup, alloc.Name, alloc.Job.Region, node.Datacenter, node.Name, job.Meta["project"],
+				allocationMemoryLimit, prometheus.GaugeValue, float64(alloc.Resources.MemoryMB), alloc.Job.Name, alloc.TaskGroup, alloc.Name, alloc.Job.Region, node.Datacenter, node.Name, job_meta_project,
 			)
 		}(a)
 	}
