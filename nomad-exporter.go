@@ -268,7 +268,15 @@ func (e *Exporter) Collect(ch chan<- prometheus.Metric) {
 			}
 			job_meta_project, exists := job.Meta["project"]
 			if exists == false {
-				job_meta_project = "NOTSET"
+				log.Println("Nomad Job Meta Project - No 'project' key found; using default value.")
+				project_default, ok := os.LookupEnv("META_PROJECT_DEFAULT")
+				if ok {
+					log.Println("Nomad Job Meta Project - using value from env var 'META_PROJECT_DEFAULT'.")
+					job_meta_project = project_default
+				} else {
+					log.Println("Nomad Job Meta Project - Env var 'META_PROJECT_DEFAULT' not set; using hardcoded value 'NOTSET'.")
+					job_meta_project = "NOTSET"
+				}
 			}
 			for taskName, taskStats := range stats.Tasks {
 				ch <- prometheus.MustNewConstMetric(
