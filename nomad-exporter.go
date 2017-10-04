@@ -268,7 +268,7 @@ func (e *Exporter) Collect(ch chan<- prometheus.Metric) {
 			}
 			job_meta_project, exists := job.Meta["project"]
 			if !exists {
-				log.Println("Nomad Job Meta Project - No 'project' key found for job {}; using default value.", job.Name)
+				log.Println("Nomad Job Meta Project - No 'project' key found for job ", job.Name, "; using default value.")
 				project_default, ok := os.LookupEnv("META_PROJECT_DEFAULT")
 				if ok {
 					log.Println("Nomad Job Meta Project - using value from env var 'META_PROJECT_DEFAULT'.")
@@ -329,7 +329,7 @@ func (e *Exporter) Collect(ch chan<- prometheus.Metric) {
 			}
 			node_meta_pool, exists := node.Meta["pool"]
 			if !exists {
-				log.Println("Pool value does not exist for node {}. Setting to 'UNKNOWN'.", node.Name)
+				log.Println("Pool value does not exist for node ", node.Name, ". Setting to 'UNKNOWN'.")
 				node_meta_pool = "UNKNOWN"
 			}
 			runningAllocs, err := getRunningAllocs(e.client, node.ID)
