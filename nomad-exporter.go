@@ -327,10 +327,10 @@ func (e *Exporter) Collect(ch chan<- prometheus.Metric) {
 				logError(err)
 				return
 			}
-			node_meta_pool, exists := node.Meta["pool"]
+			nodeMetaPool, exists := node.Meta["pool"]
 			if !exists {
 				log.Println("Pool value does not exist for node ", node.Name, ". Setting to 'UNKNOWN'.")
-				node_meta_pool = "UNKNOWN"
+				nodeMetaPool = "UNKNOWN"
 			}
 			runningAllocs, err := getRunningAllocs(e.client, node.ID)
 			if err != nil {
@@ -351,26 +351,26 @@ func (e *Exporter) Collect(ch chan<- prometheus.Metric) {
 				}
 
 				ch <- prometheus.MustNewConstMetric(
-					nodeResourceMemory, prometheus.GaugeValue, float64(node.Resources.MemoryMB), node.Name, node.Datacenter, node_meta_pool,
+					nodeResourceMemory, prometheus.GaugeValue, float64(node.Resources.MemoryMB), node.Name, node.Datacenter, nodeMetaPool,
 				)
 				ch <- prometheus.MustNewConstMetric(
-					nodeAllocatedMemory, prometheus.GaugeValue, float64(allocatedMemory), node.Name, node.Datacenter, node_meta_pool,
+					nodeAllocatedMemory, prometheus.GaugeValue, float64(allocatedMemory), node.Name, node.Datacenter, nodeMetaPool,
 				)
 				ch <- prometheus.MustNewConstMetric(
-					nodeUsedMemory, prometheus.GaugeValue, float64(nodeStats.Memory.Used/1024/1024), node.Name, node.Datacenter, node_meta_pool,
+					nodeUsedMemory, prometheus.GaugeValue, float64(nodeStats.Memory.Used/1024/1024), node.Name, node.Datacenter, nodeMetaPool,
 				)
 				ch <- prometheus.MustNewConstMetric(
-					nodeResourceCPU, prometheus.GaugeValue, float64(node.Resources.CPU), node.Name, node.Datacenter, node_meta_pool,
+					nodeResourceCPU, prometheus.GaugeValue, float64(node.Resources.CPU), node.Name, node.Datacenter, nodeMetaPool,
 				)
 				ch <- prometheus.MustNewConstMetric(
-					nodeAllocatedCPU, prometheus.GaugeValue, float64(allocatedCPU), node.Name, node.Datacenter, node_meta_pool,
+					nodeAllocatedCPU, prometheus.GaugeValue, float64(allocatedCPU), node.Name, node.Datacenter, nodeMetaPool,
 				)
 				ch <- prometheus.MustNewConstMetric(
-					nodeUsedCPU, prometheus.GaugeValue, float64(math.Floor(nodeStats.CPUTicksConsumed)), node.Name, node.Datacenter, node_meta_pool,
+					nodeUsedCPU, prometheus.GaugeValue, float64(math.Floor(nodeStats.CPUTicksConsumed)), node.Name, node.Datacenter, nodeMetaPool,
 				)
 				var nodeCPUAllocationValue = float64(allocatedCPU) / float64(node.Resources.CPU)
 				ch <- prometheus.MustNewConstMetric(
-					nodeCPUAllocationRate, prometheus.GaugeValue, nodeCPUAllocationValue, node.Name, node.Datacenter, node_meta_pool,
+					nodeCPUAllocationRate, prometheus.GaugeValue, nodeCPUAllocationValue, node.Name, node.Datacenter, nodeMetaPool,
 				)
 				nodeAndRate := Pair{node, nodeCPUAllocationValue}
 				nodeResMap.Set(node.ID, nodeAndRate)
