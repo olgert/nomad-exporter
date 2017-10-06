@@ -268,7 +268,7 @@ func (e *Exporter) Collect(ch chan<- prometheus.Metric) {
 			}
 			jobMetaProject, exists := job.Meta["project"]
 			if !exists {
-				log.Println("Nomad Job Meta Project - No 'project' key found for job {}; using default value.", job.Name)
+				log.Println("Nomad Job Meta Project - No 'project' key found for job ", job.Name, "; using default value.")
 				projectDefault, ok := os.LookupEnv("META_PROJECT_DEFAULT")
 				if ok {
 					log.Println("Nomad Job Meta Project - using value from env var 'META_PROJECT_DEFAULT'.")
